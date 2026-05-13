@@ -1,29 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="ro">
 <head>
-    <title>RIMS - Harta Interventii</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIMS - Harta Interactivă Incidentelor</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>#map { height: 600px; width: 100%; }</style>
 </head>
 <body>
-    <h1>Harta Incidentelor Infrastructura</h1>
-    <div id="map"></div>
-    <script>
-        var map = L.map('map').setView([44.4268, 26.1025], 13); // Coordonate implicite (Bucuresti)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    <header>
+        <h1>Sistem de Management al Infrastructurii Rutiere (RIMS)</h1>
+    </header>
 
-        fetch('/search/incidents')
+    <div id="map"></div>
+
+    <div id="instructions">
+        Faceți click pe hartă pentru a raporta un incident nou.
+    </div>
+
+    <div id="report-form-container">
+        <h3>Raportează Incident</h3>
+        <form id="incident-form">
+            <input type="hidden" id="lat" name="lat">
+            <input type="hidden" id="lon" name="lon">
+            
+            <div class="form-group">
+                <label for="incidentType">Tip Incident:</label>
+                <select id="incidentType" name="incidentType" required>
+                    <option value="Pothole">Gropi în carosabil</option>
+                    <option value="Fallen Tree">Copac căzut</option>
+                    <option value="Damaged Road Sign">Indicator deteriorat</option>
+                    <option value="Road Flooding">Inundație carosabil</option>
+                    <option value="Other Hazard">Alt pericol</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Descriere:</label>
+                <textarea id="description" name="description" rows="3" placeholder="Detalii despre incident..." required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="reporterId">ID Raportor:</label>
+                <input type="text" id="reporterId" name="reporterId" value="USER_001" required>
+            </div>
+
+            <button type="submit" class="btn-submit">Trimite Raport</button>
+            <button type="button" class="btn-cancel" onclick="cancelReport()">Anulează</button>
+        </form>
+    </div>
+
+    <script>
+        var map = L.map('map').setView([44.4268, 26.1025], 13);
+        var currentMarker = null;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        
+        function loadIncidents() {
+            fetch('/search/incidents')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(inc => {
+                        if(inc.location) {
+                            L.marker([inc.location.latitude, inc.location.longitude])
+                             .addTo(map)
+                             .bindPopup(`<b>${inc.incidentType}</b><br>${inc.description}<br>Status: ${inc.status}`);
+                        }
+                    });
+                });
+        }
+
+        loadIncidents();
+
+        
+        map.on('click', function(e) {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            
+            currentMarker = L.marker(e.latlng).addTo(map);
+            
+            document.getElementById('lat').value = e.latlng.lat;
+            document.getElementById('lon').value = e.latlng.lng;
+            document.getElementById('report-form-container').style.display = 'block';
+        });
+
+        function cancelReport() {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+                currentMarker = null;
+            }
+            document.getElementById('report-form-container').style.display = 'none';
+        }
+
+        
+        document.getElementById('incident-form').onsubmit = function(e) {
+            e.preventDefault();
+            
+            const payload = {
+                incidentType: document.getElementById('incidentType').value,
+                description: document.getElementById('description').value,
+                location: {
+                    latitude: parseFloat(document.getElementById('lat').value),
+                    longitude: parseFloat(document.getElementById('lon').value)
+                },
+                reporterId: document.getElementById('reporterId').value,
+                status: "Reported"
+            };
+
+            fetch('/reports/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            })
             .then(response => response.json())
             .then(data => {
-                data.forEach(inc => {
-                    if(inc.location) {
-                        L.marker([inc.location.latitude, inc.location.longitude])
-                         .addTo(map)
-                         .bindPopup(`<b>${inc.incidentType}</b><br>Prioritate: ${inc.priorityScore || 'N/A'}`);
-                    }
-                });
+                alert('Incident raportat cu succes!');
+                cancelReport();
+                
+                loadIncidents();
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Eroare la raportarea incidentului.');
             });
+        };
     </script>
 </body>
 </html>

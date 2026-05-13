@@ -2,13 +2,13 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
 from datetime import datetime
+from sqlalchemy import Column, Integer, String, Float, DateTime
+from ..database.connection import Base
 
 class IncidentType(str, Enum):
     POTHOLE = "Pothole"
     FALLEN_TREE = "Fallen Tree"
-    DAMAGED_SIGN = "Damaged Road Sign"
-    FLOODING = "Road Flooding"
-    OTHER = "Other Hazard"
+    DAMAGED_SIGN = "Damaged Sign"
 
 class IncidentStatus(str, Enum):
     REPORTED = "Reported"
@@ -19,6 +19,22 @@ class IncidentStatus(str, Enum):
 class Coordinates(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
+
+class IncidentSQL(Base):
+    __tablename__ = "incidents"
+    id = Column(Integer, primary_key=True, index=True)
+    hazard_type = Column(String)
+    description = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    status = Column(String, default="Pending")
+    created_at = Column(DateTime, default=datetime.now)
+
+class Incident(BaseModel):
+    hazard_type: IncidentType
+    description: str
+    latitude: float
+    longitude: float
 
 class IncidentReport(BaseModel):
     incidentType: IncidentType

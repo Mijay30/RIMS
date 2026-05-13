@@ -7,16 +7,15 @@ class ValidationService:
         self.db = Database.connect()
 
     def is_duplicate_incident(self, coords: Coordinates, radius_km: float = 0.05) -> bool:
-        # Caută incidente active într-o rază de aproximativ 50 metri
-        # Folosim o logică simplificată de proximitate pentru coordonate
+
+
         active_incidents = self.db.incidents.find({"status": {"$ne": "Resolved"}})
         
         for inc in active_incidents:
             loc = inc.get("location", {})
             lat_diff = abs(loc.get("latitude", 0) - coords.latitude)
             lon_diff = abs(loc.get("longitude", 0) - coords.longitude)
-            
-            # Aproximare: 0.0005 grade ~ 50 metri
+
             if lat_diff < 0.0005 and lon_diff < 0.0005:
                 return True
         return False
@@ -25,8 +24,7 @@ class ValidationService:
         sector = self.db.road_sectors.find_one({"sectorId": sector_id})
         if not sector:
             return True # Dacă sectorul nu există, nu putem valida logic
-        
-        # Exemplu: Dacă drumul este marcat ca "Excelent", un raport de "Critic" 
-        # declanșează o verificare suplimentară (audit manual)
+
+
         current_grade = sector.get("conditionGrade", "Unknown")
         return not (current_grade == "Excellent" and reported_condition == "Critical")

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIMS - Interactive Incident Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #fleet-viz {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            height: 200px;
+            background: white;
+            border: 2px solid #ccc;
+            z-index: 1000;
+            padding: 10px;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        .fleet-node {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Roads Infrastructure Management System (RIMS)</h1>
+    </header>
+
+    <div id="map"></div>
+
+    <div id="fleet-viz">
+        <h4>Fleet & Teams</h4>
+        <div id="fleet-container"></div>
+    </div>
+
+    <div id="instructions">
+        Click on the map to report a new incident.
+    </div>
+
+    <div id="report-form-container">
+        <h3>Report Incident</h3>
+        <form id="incident-form">
+            <input type="hidden" id="lat" name="lat">
+            <input type="hidden" id="lon" name="lon">
+            
+            <div class="form-group">
+                <label for="hazard_type">Hazard Type:</label>
+                <select id="hazard_type" name="hazard_type" required>
+                    <option value="Pothole">Pothole</option>
+                    <option value="Fallen Tree">Fallen Tree</option>
+                    <option value="Damaged Sign">Damaged Sign</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" name="description" rows="3" placeholder="Enter details..." required></textarea>
+            </div>
+
+            <button type="submit" class="btn-submit">Submit Report</button>
+            <button type="button" class="btn-cancel" onclick="cancelReport()">Cancel</button>
+        </form>
+    </div>
+
+    <script>
+        var map = L.map('map', {
+            dragging: true,
+            zoomControl: true,
+            scrollWheelZoom: true
+        }).setView([44.4268, 26.1025], 13);
+        
+        var currentMarker = null;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        function loadIncidents() {
+            fetch('/interventions')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(inc => {
+                        const lat = inc.latitude;
+                        const lon = inc.longitude;
+                        const type = inc.hazard_type;
+                        const status = inc.status || 'Pending';
+                        
+                        if(lat && lon) {
+                            const color = status === 'Completed' ? 'green' : 'red';
+                            const markerHtml = `
+                                <div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>
+                            `;
+                            
+                            const customIcon = L.divIcon({
+                                html: markerHtml,
+                                className: 'custom-div-icon',
+                                iconSize: [12, 12],
+                                iconAnchor: [6, 6]
+                            });
+
+                            L.marker([lat, lon], {icon: customIcon})
+                             .addTo(map)
+                             .bindPopup(`<b>${type}</b><br>${inc.description}<br>Status: <b>${status}</b>`);
+                        }
+                    });
+                });
+        }
+
+        function loadFleetNodes() {
+            fetch('/fleet/nodes')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('fleet-container');
+                    if (container) {
+                        container.innerHTML = '';
+                        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                        svg.setAttribute("width", "100%");
+                        svg.setAttribute("height", data.length * 40);
+                        data.forEach((v, i) => {
+                            const y = 20 + i * 40;
+                            
+                            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                            line.setAttribute("x1", "70");
+                            line.setAttribute("y1", y);
+                            line.setAttribute("x2", "130");
+                            line.setAttribute("y2", y);
+                            line.setAttribute("stroke", "#666");
+                            line.setAttribute("stroke-width", "2");
+                            svg.appendChild(line);
+
+                            const circleV = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                            circleV.setAttribute("cx", "50");
+                            circleV.setAttribute("cy", y);
+                            circleV.setAttribute("r", "15");
+                            circleV.setAttribute("fill", "#007bff");
+                            svg.appendChild(circleV);
+
+                            const textV = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                            textV.setAttribute("x", "50");
+                            textV.setAttribute("y", y + 5);
+                            textV.setAttribute("text-anchor", "middle");
+                            textV.setAttribute("fill", "white");
+                            textV.setAttribute("font-size", "10");
+                            textV.setAttribute("font-family", "Arial");
+                            textV.textContent = "V";
+                            svg.appendChild(textV);
+
+                            const labelV = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                            labelV.setAttribute("x", "5");
+                            labelV.setAttribute("y", y + 5);
+                            labelV.setAttribute("font-size", "9");
+                            labelV.setAttribute("font-family", "Arial");
+                            labelV.textContent = v.registration_number;
+                            svg.appendChild(labelV);
+
+                            const circleT = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                            circleT.setAttribute("cx", "150");
+                            circleT.setAttribute("cy", y);
+                            circleT.setAttribute("r", "15");
+                            circleT.setAttribute("fill", "#28a745");
+                            svg.appendChild(circleT);
+
+                            const textT = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                            textT.setAttribute("x", "150");
+                            textT.setAttribute("y", y + 5);
+                            textT.setAttribute("text-anchor", "middle");
+                            textT.setAttribute("fill", "white");
+                            textT.setAttribute("font-size", "10");
+                            textT.setAttribute("font-family", "Arial");
+                            textT.textContent = "T";
+                            svg.appendChild(textT);
+
+                            const labelT = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                            labelT.setAttribute("x", "170");
+                            labelT.setAttribute("y", y + 5);
+                            labelT.setAttribute("font-size", "9");
+                            labelT.setAttribute("font-family", "Arial");
+                            labelT.textContent = "Team: " + (v.assigned_team_id || 'N/A');
+                            svg.appendChild(labelT);
+                        });
+                        container.appendChild(svg);
+                    }
+                });
+        }
+
+        loadIncidents();
+        loadFleetNodes();
+
+        map.on('click', function(e) {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            
+            currentMarker = L.marker(e.latlng).addTo(map);
+            
+            document.getElementById('lat').value = e.latlng.lat;
+            document.getElementById('lon').value = e.latlng.lng;
+            document.getElementById('report-form-container').style.display = 'block';
+        });
+
+        function cancelReport() {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+                currentMarker = null;
+            }
+            document.getElementById('report-form-container').style.display = 'none';
+        }
+
+        document.getElementById('incident-form').onsubmit = function(e) {
+            e.preventDefault();
+            
+            const payload = {
+                hazard_type: document.getElementById('hazard_type').value,
+                description: document.getElementById('description').value,
+                latitude: parseFloat(document.getElementById('lat').value),
+                longitude: parseFloat(document.getElementById('lon').value)
+            };
+
+            fetch('/reports', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Incident reported successfully!');
+                cancelReport();
+                loadIncidents();
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error reporting incident.');
+            });
+        };
+    </script>
+</body>
+</html>

@@ -10,11 +10,9 @@ class NotificationService:
 
     def notify_team_assignment(self, team_id: str, incident_id: str, vehicle_id: str):
         message = f"ALERTA: Echipa {team_id} a fost alocata incidentului {incident_id} cu vehiculul {vehicle_id}."
-        
-        # Simulare trimitere email/SMS
+
         self.logger.info(f"Email trimis catre echipa {team_id}: {message}")
-        
-        # Inregistrare in Audit Log (MongoDB)
+
         audit_entry = {
             "timestamp": datetime.now().isoformat(),
             "type": "TEAM_ASSIGNMENT",

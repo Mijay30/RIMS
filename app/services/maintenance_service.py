@@ -11,7 +11,7 @@ class MaintenanceService:
         vehicles = list(self.db.vehicles.find())
         
         for v in vehicles:
-            # Exemplu: Mentenanță necesară la fiecare 6 luni
+
             last_service = datetime.fromisoformat(v.get("lastServiceDate", datetime.now().isoformat()))
             if datetime.now() > last_service + timedelta(days=180):
                 self.mark_for_maintenance(v["registrationNumber"])

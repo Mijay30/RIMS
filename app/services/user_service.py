@@ -6,7 +6,7 @@ class UserService:
         self.db = Database.connect()
 
     def create_user(self, user_data: Dict) -> str:
-        # Rolul implicit este 'citizen' dacă nu este specificat altfel
+
         if "role" not in user_data:
             user_data["role"] = "citizen"
         
