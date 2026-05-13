@@ -1,3 +1,5 @@
+import io
+
 from fastapi import FastAPI, HTTPException
 from .models.vehicle import Vehicle
 from .models.incident import IncidentReport
