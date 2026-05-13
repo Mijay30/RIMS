@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RIMS - Harta Interventii</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>#map { height: 600px; width: 100%; }</style>
+</head>
+<body>
+    <h1>Harta Incidentelor Infrastructura</h1>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([44.4268, 26.1025], 13); // Coordonate implicite (Bucuresti)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        fetch('/search/incidents')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(inc => {
+                    if(inc.location) {
+                        L.marker([inc.location.latitude, inc.location.longitude])
+                         .addTo(map)
+                         .bindPopup(`<b>${inc.incidentType}</b><br>Prioritate: ${inc.priorityScore || 'N/A'}`);
+                    }
+                });
+            });
+    </script>
+</body>
+</html>

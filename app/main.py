@@ -7,6 +7,16 @@ from .services.search_service import SearchService
 from .services.reporting_service import ReportingService
 from fastapi.responses import StreamingResponse
 from .services.export_service import ExportService
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+import os
+
+if not os.path.exists("app/static"):
+    os.makedirs("app/static")
+
+@app.get("/map", include_in_schema=False)
+async def get_map():
+    return FileResponse("app/static/map.html")
 
 app = FastAPI(title="Roads Infrastructure Management System (RIMS)")
 allocation_service = AllocationService()
