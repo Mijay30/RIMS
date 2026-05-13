@@ -5,6 +5,8 @@ from .services.allocation import AllocationService
 from .database.connection import Database
 from .services.search_service import SearchService
 from .services.reporting_service import ReportingService
+from fastapi.responses import StreamingResponse
+from .services.export_service import ExportService
 
 app = FastAPI(title="Roads Infrastructure Management System (RIMS)")
 allocation_service = AllocationService()
@@ -51,3 +53,15 @@ async def get_analytics_summary():
         "avg_response_time_hours": reporting_service.calculate_average_response_time(),
         "fleet_overview": reporting_service.get_fleet_utilization_report()
     }
+
+
+export_service = ExportService()
+
+@app.get("/export/incidents/csv")
+async def export_incidents():
+    csv_data = export_service.export_incidents_to_csv()
+    return StreamingResponse(
+        io.StringIO(csv_data),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=incidents_report.csv"}
+    )
