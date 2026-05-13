@@ -59,7 +59,7 @@
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        
+        // Încarcă incidentele existente
         function loadIncidents() {
             fetch('/search/incidents')
                 .then(response => response.json())
@@ -76,7 +76,7 @@
 
         loadIncidents();
 
-        
+        // Gestionare click pe hartă
         map.on('click', function(e) {
             if (currentMarker) {
                 map.removeLayer(currentMarker);
@@ -97,7 +97,7 @@
             document.getElementById('report-form-container').style.display = 'none';
         }
 
-        
+        // Trimitere formular
         document.getElementById('incident-form').onsubmit = function(e) {
             e.preventDefault();
             
@@ -123,7 +123,7 @@
             .then(data => {
                 alert('Incident raportat cu succes!');
                 cancelReport();
-                
+                // Refresh map markers
                 loadIncidents();
             })
             .catch((error) => {
