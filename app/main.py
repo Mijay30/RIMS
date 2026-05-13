@@ -3,6 +3,8 @@ from .models.vehicle import Vehicle
 from .models.incident import IncidentReport
 from .services.allocation import AllocationService
 from .database.connection import Database
+from .services.search_service import SearchService
+from .services.reporting_service import ReportingService
 
 app = FastAPI(title="Roads Infrastructure Management System (RIMS)")
 allocation_service = AllocationService()
@@ -29,3 +31,23 @@ async def get_fleet_status():
     db = Database.connect()
     vehicles = list(db.vehicles.find({}, {"_id": 0}))
     return {"fleet": vehicles}
+
+
+search_service = SearchService()
+reporting_service = ReportingService()
+
+@app.get("/search/vehicles")
+async def search_vehicles(type: str = None, status: str = None):
+    return search_service.search_vehicles(vehicle_type=type, status=status)
+
+@app.get("/search/incidents")
+async def search_incidents(type: str = None, status: str = None):
+    return search_service.search_incidents(incident_type=type, status=status)
+
+@app.get("/analytics/summary")
+async def get_analytics_summary():
+    return {
+        "incident_stats": reporting_service.get_incident_statistics(),
+        "avg_response_time_hours": reporting_service.calculate_average_response_time(),
+        "fleet_overview": reporting_service.get_fleet_utilization_report()
+    }
