@@ -28,6 +28,7 @@ class IncidentSQL(Base):
     latitude = Column(Float)
     longitude = Column(Float)
     status = Column(String, default="Pending")
+    assigned_vehicle_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 
 class Incident(BaseModel):

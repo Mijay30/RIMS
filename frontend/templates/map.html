@@ -29,11 +29,23 @@
             font-family: Arial, sans-serif;
             font-size: 14px;
         }
+        .allocation-box {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .allocation-box select {
+            width: 100%;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
     <header>
         <h1>Roads Infrastructure Management System (RIMS)</h1>
+        <nav style="position: absolute; top: 20px; right: 20px;">
+            <a href="/admin" style="color: white; text-decoration: none; font-weight: bold; background: #34495e; padding: 10px 15px; border-radius: 5px;">Admin Dashboard</a>
+        </nav>
     </header>
 
     <div id="map"></div>
@@ -96,7 +108,7 @@
                         const status = inc.status || 'Pending';
                         
                         if(lat && lon) {
-                            const color = status === 'Completed' ? 'green' : 'red';
+                            const color = status === 'Completed' ? 'green' : (status === 'Assigned' ? 'orange' : 'red');
                             const markerHtml = `
                                 <div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>
                             `;
@@ -108,12 +120,82 @@
                                 iconAnchor: [6, 6]
                             });
 
+                            let popupContent = `<b>${type}</b><br>${inc.description}<br>Status: <b>${status}</b>`;
+                            
+                            if (status === 'Pending') {
+                                popupContent += `
+                                    <div id="allocation-container-${inc.id}" class="allocation-box">
+                                        <button onclick="showAllocationDropdown(event, ${inc.id})">Allocate Resource</button>
+                                    </div>
+                                `;
+                            }
+
                             L.marker([lat, lon], {icon: customIcon})
                              .addTo(map)
-                             .bindPopup(`<b>${type}</b><br>${inc.description}<br>Status: <b>${status}</b>`);
+                             .bindPopup(popupContent);
                         }
                     });
                 });
+        }
+
+        function showAllocationDropdown(event, incidentId) {
+            if (event) event.stopPropagation();
+            const container = document.getElementById(`allocation-container-${incidentId}`);
+            const btn = container.querySelector('button');
+            if (btn && btn.innerText === 'Allocate Resource') {
+                btn.innerText = 'Loading...';
+                btn.disabled = true;
+            }
+            
+            fetch(`/incidents/${incidentId}/suggestions`)
+                .then(res => res.json())
+                .then(suggestions => {
+                    if (suggestions.length === 0) {
+                        container.innerHTML = '<p>No available vehicles nearby.</p>';
+                        return;
+                    }
+                    let html = '<select id="vehicle-select-' + incidentId + '" style="width: 100%; margin-bottom: 5px;">';
+                    suggestions.forEach(s => {
+                        html += `<option value="${s.vehicle_id}">${s.registration_number} (${s.vehicle_type}) - ${s.distance} units</option>`;
+                    });
+                    html += '</select>';
+                    html += `<div style="display: flex; gap: 5px;">`;
+                    html += `<button onclick="allocateResource(event, ${incidentId})" style="flex: 1; background: #28a745; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 3px;">Assign</button>`;
+                    html += `<button onclick="cancelAllocation(event, ${incidentId})" style="flex: 1; background: #dc3545; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 3px;">Cancel</button>`;
+                    html += `</div>`;
+                    container.innerHTML = html;
+                })
+                .catch(err => {
+                    container.innerHTML = '<p>Error loading suggestions.</p>';
+                    console.error(err);
+                });
+        }
+
+        function allocateResource(event, incidentId) {
+            if (event) event.stopPropagation();
+            const vehicleId = document.getElementById(`vehicle-select-${incidentId}`).value;
+            fetch(`/incidents/${incidentId}/allocate?vehicle_id=${vehicleId}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(err => {
+                alert('An error occurred during allocation.');
+                console.error(err);
+            });
+        }
+
+        function cancelAllocation(event, incidentId) {
+            if (event) event.stopPropagation();
+            const container = document.getElementById(`allocation-container-${incidentId}`);
+            container.innerHTML = `<button onclick="showAllocationDropdown(event, ${incidentId})">Allocate Resource</button>`;
         }
 
         function loadFleetNodes() {
@@ -142,7 +224,7 @@
                             circleV.setAttribute("cx", "50");
                             circleV.setAttribute("cy", y);
                             circleV.setAttribute("r", "15");
-                            circleV.setAttribute("fill", "#007bff");
+                            circleV.setAttribute("fill", v.availability_status === 'Available' ? "#007bff" : "#dc3545");
                             svg.appendChild(circleV);
 
                             const textV = document.createElementNS("http://www.w3.org/2000/svg", "text");

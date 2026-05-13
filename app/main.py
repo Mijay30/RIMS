@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from .models.vehicle import Vehicle, VehicleSQL
+from .models.vehicle import Vehicle, VehicleSQL, VehicleTypeSQL, VehicleType
 from .models.incident import IncidentReport, Incident, IncidentSQL
 from .services.allocation import AllocationService
 from .database.connection import Database, Base, engine, SessionLocal
@@ -33,6 +33,14 @@ export_service = ExportService()
 async def startup_db_client():
     Database.connect()
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        if not db.query(VehicleTypeSQL).first():
+            for t in VehicleType:
+                db.add(VehicleTypeSQL(name=t.value))
+            db.commit()
+    finally:
+        db.close()
 
 @app.get("/")
 async def get_root(request: Request):
@@ -42,6 +50,63 @@ async def get_root(request: Request):
 async def get_map(request: Request):
     return templates.TemplateResponse(request=request, name='map.html', context={})
 
+@app.get("/admin")
+async def get_admin(request: Request):
+    return templates.TemplateResponse(request=request, name="admin_dashboard.html")
+
+@app.get("/admin/stats")
+async def get_admin_stats():
+    db = SessionLocal()
+    try:
+        vehicles = db.query(VehicleSQL).all()
+        active_units = sum(1 for v in vehicles if v.availability_status != "Maintenance")
+        under_maintenance = sum(1 for v in vehicles if v.availability_status == "Maintenance")
+        
+        available_capacity = 0
+        for v in vehicles:
+            if v.availability_status == "Available":
+                try:
+                    available_capacity += float(v.capacity.replace('kg', ''))
+                except (ValueError, TypeError, AttributeError):
+                    pass
+        
+        type_dist = {}
+        for v in vehicles:
+            v_type = v.vehicle_type or "Unknown"
+            type_dist[v_type] = type_dist.get(v_type, 0) + 1
+            
+        return {
+            "active_units": active_units,
+            "under_maintenance": under_maintenance,
+            "available_capacity": available_capacity,
+            "type_distribution": type_dist
+        }
+    finally:
+        db.close()
+
+@app.get("/vehicle-types")
+async def list_vehicle_types():
+    db = SessionLocal()
+    try:
+        types = db.query(VehicleTypeSQL).all()
+        return [t.name for t in types]
+    finally:
+        db.close()
+
+@app.post("/vehicle-types")
+async def add_vehicle_type(name: str):
+    db = SessionLocal()
+    try:
+        new_type = VehicleTypeSQL(name=name)
+        db.add(new_type)
+        db.commit()
+        return {"name": name}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
 @app.post("/reports")
 async def create_report(incident: Incident):
     return gis_svc.save_report(incident.dict())
@@ -50,9 +115,13 @@ async def create_report(incident: Incident):
 async def resolve_incident(incident_id: str):
     return lifecycle_svc.resolve_incident(incident_id)
 
-@app.post("/interventions/allocate")
-async def allocate_intervention(incident_id: str, vehicle_id: str, staff_id: str):
-    result = allocation_service.allocate_resource(incident_id, vehicle_id, staff_id)
+@app.get("/incidents/{incident_id}/suggestions")
+async def get_incident_suggestions(incident_id: int):
+    return allocation_service.get_suggestions(incident_id)
+
+@app.post("/incidents/{incident_id}/allocate")
+async def allocate_incident_resource(incident_id: int, vehicle_id: int):
+    result = allocation_service.allocate_resource(incident_id, vehicle_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return result
@@ -76,6 +145,12 @@ async def get_fleet_nodes():
             {
                 "id": v.id,
                 "registration_number": v.registration_number,
+                "vehicle_type": v.vehicle_type,
+                "capacity": v.capacity,
+                "equipment_type": v.equipment_type,
+                "availability_status": v.availability_status,
+                "maintenance_status": v.maintenance_status,
+                "maintenance_history": v.maintenance_history,
                 "assigned_team_id": v.assigned_team_id,
                 "status": v.status
             }
