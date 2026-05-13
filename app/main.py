@@ -9,7 +9,23 @@ from fastapi.responses import StreamingResponse
 from .services.export_service import ExportService
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from .services.lifecycle_service import LifecycleService
+from .services.priority_service import PriorityService
 import os
+
+app = FastAPI(title="Roads Infrastructure Management System (RIMS)")
+
+lifecycle_svc = LifecycleService()
+priority_svc = PriorityService()
+
+@app.post("/incidents/{incident_id}/resolve")
+async def resolve_incident(incident_id: str):
+    return lifecycle_svc.resolve_incident(incident_id)
+
+@app.post("/incidents/{incident_id}/update-priority")
+async def update_priority(incident_id: str):
+    priority_svc.update_incident_priority(incident_id)
+    return {"message": "Priority updated based on road conditions."}
 
 if not os.path.exists("app/static"):
     os.makedirs("app/static")
@@ -18,7 +34,7 @@ if not os.path.exists("app/static"):
 async def get_map():
     return FileResponse("app/static/map.html")
 
-app = FastAPI(title="Roads Infrastructure Management System (RIMS)")
+
 allocation_service = AllocationService()
 
 @app.on_event("startup")
