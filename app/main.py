@@ -8,6 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from .auth import get_current_user, create_access_token, require_user_role, require_staff_role, require_admin_role, verify_password, get_password_hash
 from .models.vehicle import Vehicle, VehicleSQL, VehicleTypeSQL, VehicleType
 from .models.incident import IncidentReport, Incident, IncidentSQL, IncidentStatus
+from app.models.incident import IncidentStatus
 from .models.team import TeamMemberSQL, TeamMemberCreate, TeamMemberUpdate
 from .models.auth import UserSQL
 from .models.road_inventory import RoadSegmentSQL
