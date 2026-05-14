@@ -1,27 +1,42 @@
-from datetime import datetime
-from ..database.connection import Database
+from ..database.connection import SessionLocal
+from ..models.incident import IncidentSQL, IncidentStatus
+from .incident_service import IncidentService
 
 class LifecycleService:
-    def __init__(self):
-        self.db = Database.connect()
+    def advance_status(self, incident_id: int):
+        db = SessionLocal()
+        try:
+            incident = db.query(IncidentSQL).filter(IncidentSQL.id == incident_id).first()
+            if not incident:
+                return {"success": False, "message": "Incident not found"}
+            
+            current_status = incident.status
+            next_status = IncidentService.get_next_status(current_status)
+            
+            if not next_status:
+                return {"success": False, "message": "Incident already completed or invalid status"}
+            
+            if current_status == IncidentStatus.REPORTED:
+                return {"success": False, "message": "Incident must be assigned a vehicle first"}
 
-    def resolve_incident(self, incident_id: str):
+            incident.status = next_status
+            db.commit()
+            return {"success": True, "new_status": incident.status.value}
+        except Exception as e:
+            db.rollback()
+            return {"success": False, "message": str(e)}
+        finally:
+            db.close()
 
-        self.db.incidents.update_one(
-            {"incidentId": incident_id},
-            {"$set": {
-                "status": "Resolved",
-                "resolvedAt": datetime.now().isoformat()
-            }}
-        )
-
-
-        allocation = self.db.allocations.find_one({"incidentId": incident_id})
-        if allocation:
-            reg_number = allocation.get("vehicleRegistration")
-            self.db.vehicles.update_one(
-                {"registrationNumber": reg_number},
-                {"$set": {"status": "Available"}}
-            )
-        
-        return {"status": "success", "message": f"Incidentul {incident_id} a fost finalizat."}
+    def resolve_incident(self, incident_id: int):
+        db = SessionLocal()
+        try:
+            incident = db.query(IncidentSQL).filter(IncidentSQL.id == incident_id).first()
+            if not incident:
+                return {"success": False, "message": "Incident not found"}
+            
+            incident.status = IncidentStatus.COMPLETED
+            db.commit()
+            return {"status": "success", "message": f"Incident {incident_id} has been completed."}
+        finally:
+            db.close()

@@ -46,7 +46,7 @@ class AllocationService:
             if vehicle.availability_status != "Available":
                 return {"success": False, "message": "Vehicle is not available"}
 
-            incident.status = "Assigned"
+            incident.status = "assigned"
             incident.assigned_vehicle_id = str(vehicle.id)
             vehicle.availability_status = "Busy"
             

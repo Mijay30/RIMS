@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SQLEnum
 from ..database.connection import Base
 
 class IncidentType(str, Enum):
@@ -11,10 +11,10 @@ class IncidentType(str, Enum):
     DAMAGED_SIGN = "Damaged Sign"
 
 class IncidentStatus(str, Enum):
-    REPORTED = "Reported"
-    ASSIGNED = "Assigned"
-    IN_PROGRESS = "In Progress"
-    COMPLETED = "Completed"
+    REPORTED = "reported"
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in progress"
+    COMPLETED = "completed"
 
 class Coordinates(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
@@ -27,9 +27,10 @@ class IncidentSQL(Base):
     description = Column(String)
     latitude = Column(Float)
     longitude = Column(Float)
-    status = Column(String, default="Pending")
+    status = Column(SQLEnum(IncidentStatus), default=IncidentStatus.REPORTED)
     assigned_vehicle_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    last_modified = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 class Incident(BaseModel):
     hazard_type: IncidentType

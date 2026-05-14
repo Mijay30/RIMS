@@ -7,6 +7,7 @@ sys.path.append(os.getcwd())
 
 from app.database.connection import engine, Base, SessionLocal
 from app.models.vehicle import VehicleSQL, VehicleTypeSQL, VehicleType
+from app.models.incident import IncidentSQL, IncidentStatus
 
 def reinit_db():
     db_file = "rims.db"
@@ -66,6 +67,26 @@ def reinit_db():
             )
         ]
         db.add_all(vehicles)
+
+        print("Seeding sample incidents...")
+        incidents = [
+            IncidentSQL(
+                hazard_type="Pothole",
+                description="Large pothole in the middle of the road",
+                latitude=44.4268,
+                longitude=26.1025,
+                status=IncidentStatus.REPORTED
+            ),
+            IncidentSQL(
+                hazard_type="Fallen Tree",
+                description="Tree blocking the sidewalk",
+                latitude=44.4350,
+                longitude=26.1100,
+                status=IncidentStatus.REPORTED
+            )
+        ]
+        db.add_all(incidents)
+
         db.commit()
         print("Database re-initialized and seeded successfully.")
     except Exception as e:

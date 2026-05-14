@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from .models.vehicle import Vehicle, VehicleSQL, VehicleTypeSQL, VehicleType
 from .models.incident import IncidentReport, Incident, IncidentSQL
+from .models.team import TeamMemberSQL, TeamMemberCreate, TeamMemberUpdate
 from .services.allocation import AllocationService
 from .database.connection import Database, Base, engine, SessionLocal
 from .services.search_service import SearchService
@@ -39,6 +40,56 @@ async def startup_db_client():
             for t in VehicleType:
                 db.add(VehicleTypeSQL(name=t.value))
             db.commit()
+        
+        if not db.query(TeamMemberSQL).first():
+            members = [
+                TeamMemberSQL(full_name="Alice Johnson", certification_level="Senior", availability_status="Active", department="Maintenance"),
+                TeamMemberSQL(full_name="Bob Smith", certification_level="Junior", availability_status="Active", department="Logistics"),
+                TeamMemberSQL(full_name="Charlie Brown", certification_level="Senior", availability_status="Inactive", department="Engineering")
+            ]
+            db.add_all(members)
+            db.commit()
+    finally:
+        db.close()
+
+@app.get("/team-members")
+async def get_team_members():
+    db = SessionLocal()
+    try:
+        members = db.query(TeamMemberSQL).all()
+        return members
+    finally:
+        db.close()
+
+@app.post("/team-members")
+async def create_team_member(member: TeamMemberCreate):
+    db = SessionLocal()
+    try:
+        new_member = TeamMemberSQL(**member.dict())
+        db.add(new_member)
+        db.commit()
+        db.refresh(new_member)
+        return new_member
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.patch("/team-members/{member_id}")
+async def update_member_status(member_id: int, update: TeamMemberUpdate):
+    db = SessionLocal()
+    try:
+        member = db.query(TeamMemberSQL).filter(TeamMemberSQL.id == member_id).first()
+        if not member:
+            raise HTTPException(status_code=404, detail="Member not found")
+        member.availability_status = update.availability_status
+        db.commit()
+        db.refresh(member)
+        return member
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
@@ -112,8 +163,15 @@ async def create_report(incident: Incident):
     return gis_svc.save_report(incident.dict())
 
 @app.post("/incidents/{incident_id}/resolve")
-async def resolve_incident(incident_id: str):
+async def resolve_incident(incident_id: int):
     return lifecycle_svc.resolve_incident(incident_id)
+
+@app.post("/incidents/{incident_id}/advance")
+async def advance_incident_status(incident_id: int):
+    result = lifecycle_svc.advance_status(incident_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
 
 @app.get("/incidents/{incident_id}/suggestions")
 async def get_incident_suggestions(incident_id: int):

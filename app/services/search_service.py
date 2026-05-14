@@ -22,7 +22,8 @@ class SearchService:
                     "latitude": inc.latitude,
                     "longitude": inc.longitude,
                     "status": inc.status,
-                    "created_at": inc.created_at.isoformat() if inc.created_at else None
+                    "created_at": inc.created_at.isoformat() if inc.created_at else None,
+                    "last_modified": inc.last_modified.isoformat() if inc.last_modified else None
                 }
                 for inc in incidents
             ]

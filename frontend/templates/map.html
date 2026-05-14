@@ -38,6 +38,30 @@
             width: 100%;
             margin-bottom: 5px;
         }
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            margin-left: -125px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 2000;
+            left: 50%;
+            bottom: 30px;
+            font-size: 17px;
+        }
+        #toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
 </head>
 <body>
@@ -84,6 +108,8 @@
         </form>
     </div>
 
+    <div id="toast"></div>
+
     <script>
         var map = L.map('map', {
             dragging: true,
@@ -97,6 +123,13 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
+        function showToast(message) {
+            var x = document.getElementById("toast");
+            x.innerText = message;
+            x.className = "show";
+            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+        }
+
         function loadIncidents() {
             fetch('/interventions')
                 .then(response => response.json())
@@ -105,10 +138,10 @@
                         const lat = inc.latitude;
                         const lon = inc.longitude;
                         const type = inc.hazard_type;
-                        const status = inc.status || 'Pending';
+                        const status = inc.status || 'reported';
                         
                         if(lat && lon) {
-                            const color = status === 'Completed' ? 'green' : (status === 'Assigned' ? 'orange' : 'red');
+                            const color = status === 'completed' ? 'green' : (status === 'assigned' ? 'orange' : (status === 'in progress' ? 'blue' : 'red'));
                             const markerHtml = `
                                 <div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>
                             `;
@@ -122,10 +155,17 @@
 
                             let popupContent = `<b>${type}</b><br>${inc.description}<br>Status: <b>${status}</b>`;
                             
-                            if (status === 'Pending') {
+                            if (status === 'reported') {
                                 popupContent += `
                                     <div id="allocation-container-${inc.id}" class="allocation-box">
                                         <button onclick="showAllocationDropdown(event, ${inc.id})">Allocate Resource</button>
+                                    </div>
+                                `;
+                            } else if (status !== 'completed') {
+                                let label = status === 'assigned' ? 'Start Progress' : 'Complete Incident';
+                                popupContent += `
+                                    <div class="allocation-box">
+                                        <button onclick="advanceStatus(event, ${inc.id})">${label}</button>
                                     </div>
                                 `;
                             }
@@ -136,6 +176,30 @@
                         }
                     });
                 });
+        }
+
+        function advanceStatus(event, incidentId) {
+            if (event) event.stopPropagation();
+            fetch(`/incidents/${incidentId}/advance`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.new_status === 'completed') {
+                        showToast('Incident marked as Completed!');
+                    } else {
+                        showToast('Status advanced to: ' + data.new_status);
+                    }
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('Error: ' + data.message);
+                }
+            })
+            .catch(err => {
+                showToast('An error occurred.');
+                console.error(err);
+            });
         }
 
         function showAllocationDropdown(event, incidentId) {
@@ -180,14 +244,14 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    alert(data.message);
-                    location.reload();
+                    showToast(data.message);
+                    setTimeout(() => location.reload(), 1500);
                 } else {
-                    alert('Error: ' + data.message);
+                    showToast('Error: ' + data.message);
                 }
             })
             .catch(err => {
-                alert('An error occurred during allocation.');
+                showToast('An error occurred during allocation.');
                 console.error(err);
             });
         }
@@ -317,13 +381,13 @@
             })
             .then(response => response.json())
             .then(data => {
-                alert('Incident reported successfully!');
+                showToast('Incident reported successfully!');
                 cancelReport();
-                loadIncidents();
+                setTimeout(() => loadIncidents(), 1000);
             })
             .catch((error) => {
                 console.error('Error:', error);
-                alert('Error reporting incident.');
+                showToast('Error reporting incident.');
             });
         };
     </script>
