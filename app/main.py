@@ -5,10 +5,11 @@ from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordRequestForm
-from .auth import get_current_user, create_access_token, require_user_role, require_staff_role, require_admin_role
+from .auth import get_current_user, create_access_token, require_user_role, require_staff_role, require_admin_role, verify_password
 from .models.vehicle import Vehicle, VehicleSQL, VehicleTypeSQL, VehicleType
 from .models.incident import IncidentReport, Incident, IncidentSQL
 from .models.team import TeamMemberSQL, TeamMemberCreate, TeamMemberUpdate
+from .models.auth import UserSQL
 from .services.allocation import AllocationService
 from .database.connection import Database, Base, engine, SessionLocal
 from .services.search_service import SearchService
@@ -64,12 +65,24 @@ async def startup_db_client():
 async def login_for_access_token(request: Request):
     form_data = await request.form()
     username = form_data.get("username")
-    role = form_data.get("role", "user")
+    password = form_data.get("password")
     
-    access_token = create_access_token(data={"sub": username, "role": role})
-    response = JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
-    response.set_cookie(key="access_token", value=access_token, httponly=True)
-    return response
+    db = SessionLocal()
+    try:
+        user = db.query(UserSQL).filter(UserSQL.username == username).first()
+        if not user or not verify_password(password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        access_token = create_access_token(data={"sub": user.username, "role": user.role.lower()})
+        response = JSONResponse(content={"access_token": access_token, "token_type": "bearer", "role": user.role.lower()})
+        response.set_cookie(key="access_token", value=access_token, httponly=True)
+        return response
+    finally:
+        db.close()
 
 @app.get("/login")
 async def get_login(request: Request):
@@ -83,7 +96,7 @@ async def get_root(request: Request):
 async def get_map(request: Request, current_user: dict = Depends(require_user_role)):
     return templates.TemplateResponse(request=request, name='map.html', context={"user": current_user})
 
-@app.get("/admin")
+@app.get("/admin-dashboard")
 async def get_admin(request: Request, current_user: dict = Depends(require_staff_role)):
     return templates.TemplateResponse(request=request, name="admin_dashboard.html", context={"user": current_user})
 
