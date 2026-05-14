@@ -1,9 +1,11 @@
 import io
 import os
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request, Depends, status, Response
+from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.security import OAuth2PasswordRequestForm
+from .auth import get_current_user, create_access_token, require_user_role, require_staff_role, require_admin_role
 from .models.vehicle import Vehicle, VehicleSQL, VehicleTypeSQL, VehicleType
 from .models.incident import IncidentReport, Incident, IncidentSQL
 from .models.team import TeamMemberSQL, TeamMemberCreate, TeamMemberUpdate
@@ -30,6 +32,12 @@ search_service = SearchService()
 reporting_service = ReportingService()
 export_service = ExportService()
 
+@app.exception_handler(HTTPException)
+async def auth_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        return RedirectResponse(url="/login")
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 @app.on_event("startup")
 async def startup_db_client():
     Database.connect()
@@ -52,8 +60,35 @@ async def startup_db_client():
     finally:
         db.close()
 
+@app.post("/token")
+async def login_for_access_token(request: Request):
+    form_data = await request.form()
+    username = form_data.get("username")
+    role = form_data.get("role", "user")
+    
+    access_token = create_access_token(data={"sub": username, "role": role})
+    response = JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
+    response.set_cookie(key="access_token", value=access_token, httponly=True)
+    return response
+
+@app.get("/login")
+async def get_login(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html")
+
+@app.get("/")
+async def get_root(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html")
+
+@app.get("/map", include_in_schema=False)
+async def get_map(request: Request, current_user: dict = Depends(require_user_role)):
+    return templates.TemplateResponse(request=request, name='map.html', context={"user": current_user})
+
+@app.get("/admin")
+async def get_admin(request: Request, current_user: dict = Depends(require_staff_role)):
+    return templates.TemplateResponse(request=request, name="admin_dashboard.html", context={"user": current_user})
+
 @app.get("/team-members")
-async def get_team_members():
+async def get_team_members(current_user: dict = Depends(require_staff_role)):
     db = SessionLocal()
     try:
         members = db.query(TeamMemberSQL).all()
@@ -62,7 +97,7 @@ async def get_team_members():
         db.close()
 
 @app.post("/team-members")
-async def create_team_member(member: TeamMemberCreate):
+async def create_team_member(member: TeamMemberCreate, current_user: dict = Depends(require_admin_role)):
     db = SessionLocal()
     try:
         new_member = TeamMemberSQL(**member.dict())
@@ -77,7 +112,7 @@ async def create_team_member(member: TeamMemberCreate):
         db.close()
 
 @app.patch("/team-members/{member_id}")
-async def update_member_status(member_id: int, update: TeamMemberUpdate):
+async def update_member_status(member_id: int, update: TeamMemberUpdate, current_user: dict = Depends(require_admin_role)):
     db = SessionLocal()
     try:
         member = db.query(TeamMemberSQL).filter(TeamMemberSQL.id == member_id).first()
@@ -93,20 +128,8 @@ async def update_member_status(member_id: int, update: TeamMemberUpdate):
     finally:
         db.close()
 
-@app.get("/")
-async def get_root(request: Request):
-    return templates.TemplateResponse(request=request, name="map.html")
-
-@app.get("/map", include_in_schema=False)
-async def get_map(request: Request):
-    return templates.TemplateResponse(request=request, name='map.html', context={})
-
-@app.get("/admin")
-async def get_admin(request: Request):
-    return templates.TemplateResponse(request=request, name="admin_dashboard.html")
-
 @app.get("/admin/stats")
-async def get_admin_stats():
+async def get_admin_stats(current_user: dict = Depends(require_staff_role)):
     db = SessionLocal()
     try:
         vehicles = db.query(VehicleSQL).all()
@@ -136,7 +159,7 @@ async def get_admin_stats():
         db.close()
 
 @app.get("/vehicle-types")
-async def list_vehicle_types():
+async def list_vehicle_types(current_user: dict = Depends(require_staff_role)):
     db = SessionLocal()
     try:
         types = db.query(VehicleTypeSQL).all()
@@ -145,7 +168,7 @@ async def list_vehicle_types():
         db.close()
 
 @app.post("/vehicle-types")
-async def add_vehicle_type(name: str):
+async def add_vehicle_type(name: str, current_user: dict = Depends(require_admin_role)):
     db = SessionLocal()
     try:
         new_type = VehicleTypeSQL(name=name)
@@ -159,43 +182,43 @@ async def add_vehicle_type(name: str):
         db.close()
 
 @app.post("/reports")
-async def create_report(incident: Incident):
+async def create_report(incident: Incident, current_user: dict = Depends(require_user_role)):
     return gis_svc.save_report(incident.dict())
 
 @app.post("/incidents/{incident_id}/resolve")
-async def resolve_incident(incident_id: int):
+async def resolve_incident(incident_id: int, current_user: dict = Depends(require_staff_role)):
     return lifecycle_svc.resolve_incident(incident_id)
 
 @app.post("/incidents/{incident_id}/advance")
-async def advance_incident_status(incident_id: int):
+async def advance_incident_status(incident_id: int, current_user: dict = Depends(require_staff_role)):
     result = lifecycle_svc.advance_status(incident_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
 @app.get("/incidents/{incident_id}/suggestions")
-async def get_incident_suggestions(incident_id: int):
+async def get_incident_suggestions(incident_id: int, current_user: dict = Depends(require_staff_role)):
     return allocation_service.get_suggestions(incident_id)
 
 @app.post("/incidents/{incident_id}/allocate")
-async def allocate_incident_resource(incident_id: int, vehicle_id: int):
+async def allocate_incident_resource(incident_id: int, vehicle_id: int, current_user: dict = Depends(require_staff_role)):
     result = allocation_service.allocate_resource(incident_id, vehicle_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
 @app.get("/interventions")
-async def get_interventions():
+async def get_interventions(current_user: dict = Depends(require_user_role)):
     return search_service.search_incidents()
 
 @app.get("/fleet/status")
-async def get_fleet_status():
+async def get_fleet_status(current_user: dict = Depends(require_staff_role)):
     db = Database.connect()
     vehicles = list(db.vehicles.find({}, {"_id": 0}))
     return {"fleet": vehicles}
 
 @app.get("/fleet/nodes")
-async def get_fleet_nodes():
+async def get_fleet_nodes(current_user: dict = Depends(require_staff_role)):
     db = SessionLocal()
     try:
         vehicles = db.query(VehicleSQL).all()
@@ -218,15 +241,15 @@ async def get_fleet_nodes():
         db.close()
 
 @app.get("/search/vehicles")
-async def search_vehicles(type: str = None, status: str = None):
+async def search_vehicles(type: str = None, status: str = None, current_user: dict = Depends(require_staff_role)):
     return search_service.search_vehicles(vehicle_type=type, status=status)
 
 @app.get("/search/incidents")
-async def search_incidents(type: str = None, status: str = None):
+async def search_incidents(type: str = None, status: str = None, current_user: dict = Depends(require_staff_role)):
     return search_service.search_incidents(incident_type=type, status=status)
 
 @app.get("/analytics/summary")
-async def get_analytics_summary():
+async def get_analytics_summary(current_user: dict = Depends(require_staff_role)):
     return {
         "incident_stats": reporting_service.get_incident_statistics(),
         "avg_response_time_hours": reporting_service.calculate_average_response_time(),
@@ -234,7 +257,7 @@ async def get_analytics_summary():
     }
 
 @app.get("/export/incidents/csv")
-async def export_incidents():
+async def export_incidents(current_user: dict = Depends(require_staff_role)):
     csv_data = export_service.export_incidents_to_csv()
     return StreamingResponse(
         io.StringIO(csv_data),

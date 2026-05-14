@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang='en'>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <title>RIMS - Interactive Incident Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' />
+    <link rel='stylesheet' href='{{ url_for("static", path="/styles.css") }}' />
+    <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
     <style>
         #fleet-viz {
             position: absolute;
@@ -67,50 +67,55 @@
 <body>
     <header>
         <h1>Roads Infrastructure Management System (RIMS)</h1>
-        <nav style="position: absolute; top: 20px; right: 20px;">
-            <a href="/admin" style="color: white; text-decoration: none; font-weight: bold; background: #34495e; padding: 10px 15px; border-radius: 5px;">Admin Dashboard</a>
+        {% if user.role != 'user' %}
+        <nav style='position: absolute; top: 20px; right: 20px;'>
+            <a href='/admin' style='color: white; text-decoration: none; font-weight: bold; background: #34495e; padding: 10px 15px; border-radius: 5px;'>Admin Dashboard</a>
         </nav>
+        {% endif %}
     </header>
 
-    <div id="map"></div>
+    <div id='map'></div>
 
-    <div id="fleet-viz">
+    <div id='fleet-viz' {% if user.role == 'user' %}style='display:none;'{% endif %}>
         <h4>Fleet & Teams</h4>
-        <div id="fleet-container"></div>
+        <div id='fleet-container'></div>
     </div>
 
-    <div id="instructions">
+    <div id='instructions'>
         Click on the map to report a new incident.
     </div>
 
-    <div id="report-form-container">
+    <div id='report-form-container'>
         <h3>Report Incident</h3>
-        <form id="incident-form">
-            <input type="hidden" id="lat" name="lat">
-            <input type="hidden" id="lon" name="lon">
+        <form id='incident-form'>
+            <input type='hidden' id='lat' name='lat'>
+            <input type='hidden' id='lon' name='lon'>
             
-            <div class="form-group">
-                <label for="hazard_type">Hazard Type:</label>
-                <select id="hazard_type" name="hazard_type" required>
-                    <option value="Pothole">Pothole</option>
-                    <option value="Fallen Tree">Fallen Tree</option>
-                    <option value="Damaged Sign">Damaged Sign</option>
+            <div class='form-group'>
+                <label for='hazard_type'>Hazard Type:</label>
+                <select id='hazard_type' name='hazard_type' required>
+                    <option value='Pothole'>Pothole</option>
+                    <option value='Fallen Tree'>Fallen Tree</option>
+                    {% if user.role != 'user' %}
+                    <option value='Damaged Sign'>Damaged Sign</option>
+                    {% endif %}
                 </select>
             </div>
 
-            <div class="form-group">
-                <label for="description">Description:</label>
-                <textarea id="description" name="description" rows="3" placeholder="Enter details..." required></textarea>
+            <div class='form-group'>
+                <label for='description'>Description:</label>
+                <textarea id='description' name='description' rows='3' placeholder='Enter details...' required></textarea>
             </div>
 
-            <button type="submit" class="btn-submit">Submit Report</button>
-            <button type="button" class="btn-cancel" onclick="cancelReport()">Cancel</button>
+            <button type='submit' class='btn-submit'>Submit Report</button>
+            <button type='button' class='btn-cancel' onclick='cancelReport()'>Cancel</button>
         </form>
     </div>
 
-    <div id="toast"></div>
+    <div id='toast'></div>
 
     <script>
+        const userRole = "{{ user.role }}";
         var map = L.map('map', {
             dragging: true,
             zoomControl: true,
@@ -124,10 +129,10 @@
         }).addTo(map);
 
         function showToast(message) {
-            var x = document.getElementById("toast");
+            var x = document.getElementById('toast');
             x.innerText = message;
-            x.className = "show";
-            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+            x.className = 'show';
+            setTimeout(function(){ x.className = x.className.replace('show', ''); }, 3000);
         }
 
         function loadIncidents() {
@@ -143,7 +148,7 @@
                         if(lat && lon) {
                             const color = status === 'completed' ? 'green' : (status === 'assigned' ? 'orange' : (status === 'in progress' ? 'blue' : 'red'));
                             const markerHtml = `
-                                <div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>
+                                <div style='background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;'></div>
                             `;
                             
                             const customIcon = L.divIcon({
@@ -155,19 +160,21 @@
 
                             let popupContent = `<b>${type}</b><br>${inc.description}<br>Status: <b>${status}</b>`;
                             
-                            if (status === 'reported') {
-                                popupContent += `
-                                    <div id="allocation-container-${inc.id}" class="allocation-box">
-                                        <button onclick="showAllocationDropdown(event, ${inc.id})">Allocate Resource</button>
-                                    </div>
-                                `;
-                            } else if (status !== 'completed') {
-                                let label = status === 'assigned' ? 'Start Progress' : 'Complete Incident';
-                                popupContent += `
-                                    <div class="allocation-box">
-                                        <button onclick="advanceStatus(event, ${inc.id})">${label}</button>
-                                    </div>
-                                `;
+                            if (userRole !== 'user') {
+                                if (status === 'reported') {
+                                    popupContent += `
+                                        <div id='allocation-container-${inc.id}' class='allocation-box'>
+                                            <button onclick='showAllocationDropdown(event, ${inc.id})'>Allocate Resource</button>
+                                        </div>
+                                    `;
+                                } else if (status !== 'completed') {
+                                    let label = status === 'assigned' ? 'Start Progress' : 'Complete Incident';
+                                    popupContent += `
+                                        <div class='allocation-box'>
+                                            <button onclick='advanceStatus(event, ${inc.id})'>${label}</button>
+                                        </div>
+                                    `;
+                                }
                             }
 
                             L.marker([lat, lon], {icon: customIcon})
@@ -259,7 +266,7 @@
         function cancelAllocation(event, incidentId) {
             if (event) event.stopPropagation();
             const container = document.getElementById(`allocation-container-${incidentId}`);
-            container.innerHTML = `<button onclick="showAllocationDropdown(event, ${incidentId})">Allocate Resource</button>`;
+            container.innerHTML = `<button onclick='showAllocationDropdown(event, ${incidentId})'>Allocate Resource</button>`;
         }
 
         function loadFleetNodes() {
@@ -269,69 +276,69 @@
                     const container = document.getElementById('fleet-container');
                     if (container) {
                         container.innerHTML = '';
-                        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                        svg.setAttribute("width", "100%");
-                        svg.setAttribute("height", data.length * 40);
+                        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                        svg.setAttribute('width', '100%');
+                        svg.setAttribute('height', data.length * 40);
                         data.forEach((v, i) => {
                             const y = 20 + i * 40;
                             
-                            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-                            line.setAttribute("x1", "70");
-                            line.setAttribute("y1", y);
-                            line.setAttribute("x2", "130");
-                            line.setAttribute("y2", y);
-                            line.setAttribute("stroke", "#666");
-                            line.setAttribute("stroke-width", "2");
+                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', '70');
+                            line.setAttribute('y1', y);
+                            line.setAttribute('x2', '130');
+                            line.setAttribute('y2', y);
+                            line.setAttribute('stroke', '#666');
+                            line.setAttribute('stroke-width', '2');
                             svg.appendChild(line);
 
-                            const circleV = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                            circleV.setAttribute("cx", "50");
-                            circleV.setAttribute("cy", y);
-                            circleV.setAttribute("r", "15");
-                            circleV.setAttribute("fill", v.availability_status === 'Available' ? "#007bff" : "#dc3545");
+                            const circleV = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            circleV.setAttribute('cx', '50');
+                            circleV.setAttribute('cy', y);
+                            circleV.setAttribute('r', '15');
+                            circleV.setAttribute('fill', v.availability_status === 'Available' ? '#007bff' : '#dc3545');
                             svg.appendChild(circleV);
 
-                            const textV = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                            textV.setAttribute("x", "50");
-                            textV.setAttribute("y", y + 5);
-                            textV.setAttribute("text-anchor", "middle");
-                            textV.setAttribute("fill", "white");
-                            textV.setAttribute("font-size", "10");
-                            textV.setAttribute("font-family", "Arial");
-                            textV.textContent = "V";
+                            const textV = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            textV.setAttribute('x', '50');
+                            textV.setAttribute('y', y + 5);
+                            textV.setAttribute('text-anchor', 'middle');
+                            textV.setAttribute('fill', 'white');
+                            textV.setAttribute('font-size', '10');
+                            textV.setAttribute('font-family', 'Arial');
+                            textV.textContent = 'V';
                             svg.appendChild(textV);
 
-                            const labelV = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                            labelV.setAttribute("x", "5");
-                            labelV.setAttribute("y", y + 5);
-                            labelV.setAttribute("font-size", "9");
-                            labelV.setAttribute("font-family", "Arial");
+                            const labelV = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            labelV.setAttribute('x', '5');
+                            labelV.setAttribute('y', y + 5);
+                            labelV.setAttribute('font-size', '9');
+                            labelV.setAttribute('font-family', 'Arial');
                             labelV.textContent = v.registration_number;
                             svg.appendChild(labelV);
 
-                            const circleT = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                            circleT.setAttribute("cx", "150");
-                            circleT.setAttribute("cy", y);
-                            circleT.setAttribute("r", "15");
-                            circleT.setAttribute("fill", "#28a745");
+                            const circleT = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            circleT.setAttribute('cx', '150');
+                            circleT.setAttribute('cy', y);
+                            circleT.setAttribute('r', '15');
+                            circleT.setAttribute('fill', '#28a745');
                             svg.appendChild(circleT);
 
-                            const textT = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                            textT.setAttribute("x", "150");
-                            textT.setAttribute("y", y + 5);
-                            textT.setAttribute("text-anchor", "middle");
-                            textT.setAttribute("fill", "white");
-                            textT.setAttribute("font-size", "10");
-                            textT.setAttribute("font-family", "Arial");
-                            textT.textContent = "T";
+                            const textT = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            textT.setAttribute('x', '150');
+                            textT.setAttribute('y', y + 5);
+                            textT.setAttribute('text-anchor', 'middle');
+                            textT.setAttribute('fill', 'white');
+                            textT.setAttribute('font-size', '10');
+                            textT.setAttribute('font-family', 'Arial');
+                            textT.textContent = 'T';
                             svg.appendChild(textT);
 
-                            const labelT = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                            labelT.setAttribute("x", "170");
-                            labelT.setAttribute("y", y + 5);
-                            labelT.setAttribute("font-size", "9");
-                            labelT.setAttribute("font-family", "Arial");
-                            labelT.textContent = "Team: " + (v.assigned_team_id || 'N/A');
+                            const labelT = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            labelT.setAttribute('x', '170');
+                            labelT.setAttribute('y', y + 5);
+                            labelT.setAttribute('font-size', '9');
+                            labelT.setAttribute('font-family', 'Arial');
+                            labelT.textContent = 'Team: ' + (v.assigned_team_id || 'N/A');
                             svg.appendChild(labelT);
                         });
                         container.appendChild(svg);

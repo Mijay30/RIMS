@@ -123,7 +123,7 @@
     <header>
         <h1>Roads Infrastructure Management System (RIMS) - Admin Dashboard</h1>
         <nav style="position: absolute; top: 20px; right: 20px;">
-            <a href="/" style="color: white; text-decoration: none; font-weight: bold; background: #34495e; padding: 10px 15px; border-radius: 5px;">Back to Map</a>
+            <a href="/map" style="color: white; text-decoration: none; font-weight: bold; background: #34495e; padding: 10px 15px; border-radius: 5px;">Back to Map</a>
         </nav>
     </header>
 
@@ -179,12 +179,15 @@
                         <th>Certification</th>
                         <th>Department</th>
                         <th>Status</th>
+                        {% if user.role == 'admin' %}
                         <th>Actions</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody id="team-table-body">
                 </tbody>
             </table>
+            {% if user.role == 'admin' %}
             <form id="team-form" class="form-grid">
                 <input type="text" id="member-name" placeholder="Full Name" required>
                 <select id="member-cert" required>
@@ -194,20 +197,24 @@
                 <input type="text" id="member-dept" placeholder="Department" required>
                 <button type="submit" class="btn-add">Add Member</button>
             </form>
+            {% endif %}
         </div>
 
         <div class="management-section">
             <h3>Vehicle Type Management</h3>
             <ul id="type-list"></ul>
+            {% if user.role == 'admin' %}
             <form class="form-grid" id="type-form">
                 <input type="text" id="new-type-name" placeholder="New vehicle type name..." required>
                 <button type="submit" class="btn-add">Add Type</button>
             </form>
+            {% endif %}
         </div>
     </div>
 
     <script>
         let typeChart;
+        const userRole = "{{ user.role }}";
 
         function loadStats() {
             fetch('/admin/stats')
@@ -280,17 +287,22 @@
                     data.forEach(m => {
                         const tr = document.createElement('tr');
                         const statusClass = m.availability_status === 'Active' ? 'status-active' : 'status-inactive';
-                        tr.innerHTML = `
+                        let rowHtml = `
                             <td>${m.full_name}</td>
                             <td>${m.certification_level}</td>
                             <td>${m.department}</td>
                             <td><span class="status-badge ${statusClass}">${m.availability_status}</span></td>
-                            <td>
-                                <button class="btn-toggle" onclick="toggleStatus(${m.id}, '${m.availability_status}')">
-                                    ${m.availability_status === 'Active' ? 'Deactivate' : 'Activate'}
-                                </button>
-                            </td>
                         `;
+                        if (userRole === 'admin') {
+                            rowHtml += `
+                                <td>
+                                    <button class="btn-toggle" onclick="toggleStatus(${m.id}, '${m.availability_status}')">
+                                        ${m.availability_status === 'Active' ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                </td>
+                            `;
+                        }
+                        tr.innerHTML = rowHtml;
                         tbody.appendChild(tr);
                     });
                 });
@@ -329,38 +341,42 @@
                 });
         }
 
-        document.getElementById('team-form').onsubmit = function(e) {
-            e.preventDefault();
-            const member = {
-                full_name: document.getElementById('member-name').value,
-                certification_level: document.getElementById('member-cert').value,
-                department: document.getElementById('member-dept').value,
-                availability_status: 'Active'
+        if (document.getElementById('team-form')) {
+            document.getElementById('team-form').onsubmit = function(e) {
+                e.preventDefault();
+                const member = {
+                    full_name: document.getElementById('member-name').value,
+                    certification_level: document.getElementById('member-cert').value,
+                    department: document.getElementById('member-dept').value,
+                    availability_status: 'Active'
+                };
+                fetch('/team-members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(member)
+                })
+                .then(() => {
+                    document.getElementById('team-form').reset();
+                    loadTeam();
+                });
             };
-            fetch('/team-members', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(member)
-            })
-            .then(() => {
-                document.getElementById('team-form').reset();
-                loadTeam();
-            });
-        };
+        }
 
-        document.getElementById('type-form').onsubmit = function(e) {
-            e.preventDefault();
-            const name = document.getElementById('new-type-name').value;
-            fetch('/vehicle-types?name=' + encodeURIComponent(name), {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(() => {
-                document.getElementById('new-type-name').value = '';
-                loadTypes();
-                loadStats();
-            });
-        };
+        if (document.getElementById('type-form')) {
+            document.getElementById('type-form').onsubmit = function(e) {
+                e.preventDefault();
+                const name = document.getElementById('new-type-name').value;
+                fetch('/vehicle-types?name=' + encodeURIComponent(name), {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(() => {
+                    document.getElementById('new-type-name').value = '';
+                    loadTypes();
+                    loadStats();
+                });
+            };
+        }
 
         loadFleet();
         loadTypes();
