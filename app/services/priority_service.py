@@ -1,5 +1,5 @@
 from typing import Dict
-from ..database.connection import Database
+from ..database import Database
 
 class PriorityService:
     def __init__(self):

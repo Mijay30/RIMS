@@ -1,4 +1,4 @@
-from ..database.connection import SessionLocal
+from ..database import SessionLocal
 from ..models.incident import IncidentSQL
 
 class SearchService:

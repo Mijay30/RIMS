@@ -1,5 +1,5 @@
 ﻿from typing import Dict, List
-from ..database.connection import Database
+from ..database import Database
 from ..models.incident import Coordinates
 
 class ValidationService:

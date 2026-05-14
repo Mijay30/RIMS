@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean
-from ..database.connection import Base
+from ..database import Base
 from pydantic import BaseModel, ConfigDict
 
 class TeamMemberSQL(Base):

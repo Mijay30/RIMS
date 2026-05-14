@@ -16,3 +16,6 @@ class Database:
     def connect():
         print("Connecting to Roads Infrastructure Database...")
         return True
+
+def init_db():
+    Base.metadata.create_all(bind=engine, checkfirst=True)

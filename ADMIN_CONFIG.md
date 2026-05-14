@@ -28,6 +28,16 @@ Use these pre-configured accounts to test the triple-tier security system:
 * **Staff Access**: Update permissions for incident status and vehicle allocation.
 * **User Access**: Write permissions only for reporting new incidents via the map.
 
+## 🔄 Resource Management Automation
+RIMS now features automated resource release logic (US 3 Logic) to streamline operations:
+* **Automated Release**: When an incident status is transitioned to 'Completed' (via `LifecycleService`), the system automatically:
+    * Sets the associated vehicle's `is_available` flag to `True`.
+    * Resets the vehicle's `availability_status` to "Available".
+    * Sets all assigned team members' `is_available` flag to `True`.
+    * Resets team members' `availability_status` to "Active".
+    * Updates the incident's `last_modified` timestamp.
+* **CQ-19 Compliance**: All resource availability flags follow the `is_available` naming convention.
+
 ## 🚀 Environment Setup for macOS
 1. **Python Environment**: Use `python3 -m venv .venv` and `source .venv/bin/activate`.
 2. **Library Requirements**: Ensure `python-multipart` is installed.

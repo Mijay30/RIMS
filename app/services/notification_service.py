@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Dict
-from ..database.connection import Database
+from ..database import Database
 
 class NotificationService:
     def __init__(self):

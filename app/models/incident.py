@@ -3,7 +3,7 @@ from typing import Optional
 from enum import Enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SQLEnum
-from ..database.connection import Base
+from ..database import Base
 
 class IncidentType(str, Enum):
     POTHOLE = "Pothole"

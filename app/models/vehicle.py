@@ -3,7 +3,7 @@ from typing import Optional, List
 from enum import Enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float
-from ..database.connection import Base
+from ..database import Base
 
 class VehicleStatus(str, Enum):
     AVAILABLE = "Available"

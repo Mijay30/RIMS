@@ -6,7 +6,7 @@ from datetime import datetime
 # Add the root directory to sys.path to import app modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from app.database.connection import SessionLocal
+from app.database import SessionLocal
 from app.models.vehicle import VehicleSQL
 from app.models.team import TeamMemberSQL
 

@@ -1,7 +1,7 @@
 import math
 from ..models.vehicle import VehicleSQL
 from ..models.incident import IncidentSQL
-from ..database.connection import SessionLocal
+from ..database import SessionLocal
 
 class AllocationService:
     def get_suggestions(self, incident_id: int):

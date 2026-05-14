@@ -1,5 +1,5 @@
 from typing import List, Dict
-from ..database.connection import Database
+from ..database import Database
 
 class FleetVisualizationService:
     def __init__(self):

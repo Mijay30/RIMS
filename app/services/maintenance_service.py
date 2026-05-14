@@ -1,6 +1,6 @@
 ﻿from datetime import datetime, timedelta
 from typing import List, Dict
-from ..database.connection import Database
+from ..database import Database
 
 class MaintenanceService:
     def __init__(self):

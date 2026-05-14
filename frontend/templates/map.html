@@ -116,11 +116,23 @@
 
     <script>
         const userRole = "{{ user.role }}";
+        const defaultCenter = [44.33, 23.81];
         var map = L.map('map', {
             dragging: true,
             zoomControl: true,
             scrollWheelZoom: true
-        }).setView([44.4268, 26.1025], 13);
+        }).setView(defaultCenter, 13);
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    map.setView([position.coords.latitude, position.coords.longitude], 15);
+                },
+                function() {
+                    console.log("Using default location.");
+                }
+            );
+        }
         
         var currentMarker = null;
 

@@ -1,5 +1,5 @@
 ﻿from typing import Dict, Optional
-from ..database.connection import Database
+from ..database import Database
 
 class UserService:
     def __init__(self):

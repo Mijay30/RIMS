@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional
-from ..database.connection import Database
+from ..database import Database
 from ..models.road_sector import RoadSector
 
 class RoadService:

@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from ..database.connection import Database
+from ..database import Database
 
 class BackupService:
     def __init__(self):

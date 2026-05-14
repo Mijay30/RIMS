@@ -1,7 +1,7 @@
 import csv
 import io
 from typing import List, Dict
-from ..database.connection import Database
+from ..database import Database
 
 class ExportService:
     def __init__(self):

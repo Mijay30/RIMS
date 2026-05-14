@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float
-from ..database.connection import Base
+from ..database import Base
 from pydantic import BaseModel, ConfigDict
 
 class RoadSegmentSQL(Base):

@@ -5,13 +5,14 @@ from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordRequestForm
-from .auth import get_current_user, create_access_token, require_user_role, require_staff_role, require_admin_role, verify_password
+from .auth import get_current_user, create_access_token, require_user_role, require_staff_role, require_admin_role, verify_password, get_password_hash
 from .models.vehicle import Vehicle, VehicleSQL, VehicleTypeSQL, VehicleType
 from .models.incident import IncidentReport, Incident, IncidentSQL
 from .models.team import TeamMemberSQL, TeamMemberCreate, TeamMemberUpdate
 from .models.auth import UserSQL
+from .models.road_inventory import RoadSegmentSQL
 from .services.allocation import AllocationService
-from .database.connection import Database, Base, engine, SessionLocal
+from .database import Database, Base, engine, SessionLocal, init_db
 from .services.search_service import SearchService
 from .services.reporting_service import ReportingService
 from .services.export_service import ExportService
@@ -41,8 +42,7 @@ async def auth_exception_handler(request: Request, exc: HTTPException):
 
 @app.on_event("startup")
 async def startup_db_client():
-    Database.connect()
-    Base.metadata.create_all(bind=engine)
+    init_db()
     db = SessionLocal()
     try:
         if not db.query(VehicleTypeSQL).first():
@@ -50,11 +50,42 @@ async def startup_db_client():
                 db.add(VehicleTypeSQL(name=t.value))
             db.commit()
         
+        if not db.query(UserSQL).first():
+            users = [
+                UserSQL(username="admin", hashed_password=get_password_hash("admin123"), role="Admin", email="admin@rims.com"),
+                UserSQL(username="staff", hashed_password=get_password_hash("staff123"), role="Staff", email="staff@rims.com"),
+                UserSQL(username="user", hashed_password=get_password_hash("user123"), role="User", email="user@rims.com")
+            ]
+            db.add_all(users)
+            db.commit()
+
+        if not db.query(RoadSegmentSQL).first():
+            segments = [
+                RoadSegmentSQL(segment_name="Calea Bucuresti", length=5.2, width=12.0, pavement_type="Asphalt"),
+                RoadSegmentSQL(segment_name="Nicolae Titulescu", length=3.1, width=10.0, pavement_type="Asphalt"),
+                RoadSegmentSQL(segment_name="Calea Unirii", length=2.5, width=8.0, pavement_type="Stone")
+            ]
+            db.add_all(segments)
+            db.commit()
+
+        if not db.query(VehicleSQL).first():
+            vehicles = [
+                VehicleSQL(registration_number="B-101-ASPH", vehicle_type=VehicleType.ASPHALT_LAYING.value, capacity="5000kg", equipment_type="Spreader", availability_status="Available", maintenance_status="Good", maintenance_history="New vehicle", status="Available"),
+                VehicleSQL(registration_number="B-102-ASPH", vehicle_type=VehicleType.ASPHALT_LAYING.value, capacity="5000kg", equipment_type="Spreader", availability_status="Available", maintenance_status="Good", maintenance_history="New vehicle", status="Available"),
+                VehicleSQL(registration_number="B-202-SNOW", vehicle_type=VehicleType.SNOW_REMOVAL.value, capacity="3000kg", equipment_type="Plow", availability_status="Available", maintenance_status="Good", maintenance_history="New vehicle", status="Available"),
+                VehicleSQL(registration_number="B-303-PATH", vehicle_type=VehicleType.POTHOLE_REPAIR.value, capacity="2000kg", equipment_type="Thermal patcher", availability_status="Available", maintenance_status="Good", maintenance_history="New vehicle", status="Available")
+            ]
+            db.add_all(vehicles)
+            db.commit()
+
         if not db.query(TeamMemberSQL).first():
             members = [
                 TeamMemberSQL(full_name="Alice Johnson", certification_level="Senior", availability_status="Active", is_available=True, department="Maintenance"),
                 TeamMemberSQL(full_name="Bob Smith", certification_level="Junior", availability_status="Active", is_available=True, department="Logistics"),
-                TeamMemberSQL(full_name="Charlie Brown", certification_level="Senior", availability_status="Inactive", is_available=False, department="Engineering")
+                TeamMemberSQL(full_name="Charlie Davis", certification_level="Expert", availability_status="Active", is_available=True, department="Engineering"),
+                TeamMemberSQL(full_name="Diana Prince", certification_level="Intermediate", availability_status="Active", is_available=True, department="Operations"),
+                TeamMemberSQL(full_name="Edward Norton", certification_level="Senior", availability_status="Active", is_available=True, department="Maintenance"),
+                TeamMemberSQL(full_name="Fiona Gallagher", certification_level="Junior", availability_status="Active", is_available=True, department="Field Ops")
             ]
             db.add_all(members)
             db.commit()

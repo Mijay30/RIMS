@@ -1,6 +1,6 @@
 from typing import Dict, List
 from ..models.incident import Coordinates, IncidentSQL
-from ..database.connection import SessionLocal
+from ..database import SessionLocal
 
 class GISService:
     def __init__(self, provider: str = "OpenStreetMap"):
@@ -29,11 +29,12 @@ class GISService:
     def save_report(self, data: Dict) -> Dict:
         db = SessionLocal()
         try:
+            coords = self.format_coordinates(data['latitude'], data['longitude'])
             new_incident = IncidentSQL(
                 hazard_type=data['hazard_type'],
                 description=data['description'],
-                latitude=data['latitude'],
-                longitude=data['longitude']
+                latitude=coords['latitude'],
+                longitude=coords['longitude']
             )
             db.add(new_incident)
             db.commit()
