@@ -30,6 +30,7 @@ class IncidentSQL(Base):
     status = Column(SQLEnum(IncidentStatus), default=IncidentStatus.REPORTED)
     assigned_vehicle_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    completed_at = Column(DateTime, nullable=True)
     last_modified = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 class Incident(BaseModel):

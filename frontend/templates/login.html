@@ -80,7 +80,7 @@
 <body>
     <div class="login-card">
         <h2>RIMS Login</h2>
-        <form id="login-form">
+        <form id="login-form" action="/token" method="POST">
             <div class="form-group">
                 <label for="username">Email or Username</label>
                 <input type="text" id="username" name="username" required>
@@ -97,36 +97,33 @@
     <script>
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const form = e.target;
+            const formData = new FormData(form);
             const errorDiv = document.getElementById('error');
 
-            const formData = new URLSearchParams();
-            formData.append('username', username);
-            formData.append('password', password);
-
             try {
-                const response = await fetch('/token', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: formData
+                const response = await fetch(form.action, {
+                    method: form.method,
+                    body: new URLSearchParams(formData)
                 });
 
                 if (response.ok) {
                     const data = await response.json();
                     localStorage.setItem('token', data.access_token);
                     
-                    if (data.role === 'admin') {
+                    // Redirect based on role
+                    if (data.role === 'admin' || data.role === 'staff') {
                         window.location.href = '/admin-dashboard';
                     } else {
                         window.location.href = '/map';
                     }
                 } else {
+                    const errorData = await response.json();
+                    errorDiv.innerText = errorData.detail || 'Invalid credentials';
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
+                console.error('Login error:', err);
                 errorDiv.innerText = 'Connection error';
                 errorDiv.style.display = 'block';
             }

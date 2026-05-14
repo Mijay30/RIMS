@@ -52,9 +52,9 @@ async def startup_db_client():
         
         if not db.query(TeamMemberSQL).first():
             members = [
-                TeamMemberSQL(full_name="Alice Johnson", certification_level="Senior", availability_status="Active", department="Maintenance"),
-                TeamMemberSQL(full_name="Bob Smith", certification_level="Junior", availability_status="Active", department="Logistics"),
-                TeamMemberSQL(full_name="Charlie Brown", certification_level="Senior", availability_status="Inactive", department="Engineering")
+                TeamMemberSQL(full_name="Alice Johnson", certification_level="Senior", availability_status="Active", is_available=True, department="Maintenance"),
+                TeamMemberSQL(full_name="Bob Smith", certification_level="Junior", availability_status="Active", is_available=True, department="Logistics"),
+                TeamMemberSQL(full_name="Charlie Brown", certification_level="Senior", availability_status="Inactive", is_available=False, department="Engineering")
             ]
             db.add_all(members)
             db.commit()
@@ -62,15 +62,11 @@ async def startup_db_client():
         db.close()
 
 @app.post("/token")
-async def login_for_access_token(request: Request):
-    form_data = await request.form()
-    username = form_data.get("username")
-    password = form_data.get("password")
-    
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     db = SessionLocal()
     try:
-        user = db.query(UserSQL).filter(UserSQL.username == username).first()
-        if not user or not verify_password(password, user.hashed_password):
+        user = db.query(UserSQL).filter(UserSQL.username == form_data.username).first()
+        if not user or not verify_password(form_data.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -277,3 +273,28 @@ async def export_incidents(current_user: dict = Depends(require_staff_role)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=incidents_report.csv"}
     )
+
+@app.get("/api/v1/analytics/report")
+async def get_detailed_analytics_report(current_user: dict = Depends(require_staff_role)):
+    db = SessionLocal()
+    try:
+        completed_incidents = db.query(IncidentSQL).filter(IncidentSQL.status == IncidentStatus.COMPLETED).all()
+        if not completed_incidents:
+            return {"average_resolution_time_seconds": 0, "count": 0}
+        
+        total_time = 0
+        count = 0
+        for inc in completed_incidents:
+            if inc.completed_at and inc.created_at:
+                diff = (inc.completed_at - inc.created_at).total_seconds()
+                total_time += diff
+                count += 1
+        
+        avg_time = total_time / count if count > 0 else 0
+        return {
+            "average_resolution_time_seconds": avg_time,
+            "average_resolution_time_formatted": f"{avg_time/3600:.2f} hours",
+            "count": count
+        }
+    finally:
+        db.close()

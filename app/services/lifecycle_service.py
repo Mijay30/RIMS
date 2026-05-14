@@ -1,3 +1,4 @@
+from datetime import datetime
 from ..database.connection import SessionLocal
 from ..models.incident import IncidentSQL, IncidentStatus
 from .incident_service import IncidentService
@@ -20,6 +21,8 @@ class LifecycleService:
                 return {"success": False, "message": "Incident must be assigned a vehicle first"}
 
             incident.status = next_status
+            if next_status == IncidentStatus.COMPLETED:
+                incident.completed_at = datetime.now()
             db.commit()
             return {"success": True, "new_status": incident.status.value}
         except Exception as e:
@@ -36,6 +39,7 @@ class LifecycleService:
                 return {"success": False, "message": "Incident not found"}
             
             incident.status = IncidentStatus.COMPLETED
+            incident.completed_at = datetime.now()
             db.commit()
             return {"status": "success", "message": f"Incident {incident_id} has been completed."}
         finally:

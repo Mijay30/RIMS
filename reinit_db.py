@@ -8,6 +8,8 @@ sys.path.append(os.getcwd())
 from app.database.connection import engine, Base, SessionLocal
 from app.models.vehicle import VehicleSQL, VehicleTypeSQL, VehicleType
 from app.models.incident import IncidentSQL, IncidentStatus
+from app.models.road_inventory import RoadSegmentSQL
+from app.models.team import TeamMemberSQL
 
 def reinit_db():
     db_file = "rims.db"
@@ -20,6 +22,14 @@ def reinit_db():
     
     db = SessionLocal()
     try:
+        print("Seeding road segments...")
+        segments = [
+            RoadSegmentSQL(segment_name="Calea Bucuresti", length=5.2, width=12.0, pavement_type="Asphalt"),
+            RoadSegmentSQL(segment_name="Nicolae Titulescu", length=3.1, width=10.0, pavement_type="Asphalt"),
+            RoadSegmentSQL(segment_name="Calea Unirii", length=2.5, width=8.0, pavement_type="Stone")
+        ]
+        db.add_all(segments)
+
         print("Seeding vehicle types...")
         for t in VehicleType:
             db.add(VehicleTypeSQL(name=t.value))
@@ -86,6 +96,13 @@ def reinit_db():
             )
         ]
         db.add_all(incidents)
+
+        print("Seeding sample team members...")
+        members = [
+            TeamMemberSQL(full_name="Alice Johnson", certification_level="Senior", availability_status="Active", is_available=True, department="Maintenance"),
+            TeamMemberSQL(full_name="Bob Smith", certification_level="Junior", availability_status="Active", is_available=True, department="Logistics")
+        ]
+        db.add_all(members)
 
         db.commit()
         print("Database re-initialized and seeded successfully.")

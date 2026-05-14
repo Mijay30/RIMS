@@ -1,0 +1,45 @@
+{
+    "exported_at": "2026-05-14T12:32:50.985359",
+    "fleet": [
+        {
+            "registration_number": "B-101-ASPH",
+            "vehicle_type": "Asphalt-laying machine",
+            "capacity": "5000kg",
+            "equipment_type": "Spreader",
+            "status": "Available",
+            "is_available": true
+        },
+        {
+            "registration_number": "B-202-SNOW",
+            "vehicle_type": "Snow-removal vehicle",
+            "capacity": "3000kg",
+            "equipment_type": "Plow",
+            "status": "Available",
+            "is_available": true
+        },
+        {
+            "registration_number": "B-303-PATH",
+            "vehicle_type": "Pothole repair unit",
+            "capacity": "2000kg",
+            "equipment_type": "Thermal patcher",
+            "status": "Available",
+            "is_available": true
+        }
+    ],
+    "teams": [
+        {
+            "full_name": "Alice Johnson",
+            "certification_level": "Senior",
+            "availability_status": "Active",
+            "is_available": true,
+            "department": "Maintenance"
+        },
+        {
+            "full_name": "Bob Smith",
+            "certification_level": "Junior",
+            "availability_status": "Active",
+            "is_available": true,
+            "department": "Logistics"
+        }
+    ]
+}

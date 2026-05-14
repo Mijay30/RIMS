@@ -20,7 +20,7 @@
 
 ## 🛠️ Tech Stack
 * Backend: Python / FastAPI
-* Database: SQLite with SQLAlchemy ORM
+* Database: SQLite with SQLAlchemy ORM (Chosen over MongoDB to ensure the requirement of 'running in any environment without external dependencies' for final evaluation)
 * Frontend: HTML5, CSS3, JavaScript
 
 ## 📥 Installation
