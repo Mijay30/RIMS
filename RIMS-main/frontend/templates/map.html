@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>RIMS - Interactive Incident Map</title>
+    <link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' />
+    <link rel='stylesheet' href='{{ url_for("static", path="/styles.css") }}' />
+    <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
+    <style>
+        #fleet-viz {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            height: 200px;
+            background: white;
+            border: 2px solid #ccc;
+            z-index: 1000;
+            padding: 10px;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        .fleet-node {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .allocation-box {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .allocation-box select {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            margin-left: -125px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 2000;
+            left: 50%;
+            bottom: 30px;
+            font-size: 17px;
+        }
+        #toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Roads Infrastructure Management System (RIMS)</h1>
+        {% if user.role != 'user' %}
+        <nav style='position: absolute; top: 20px; right: 20px;'>
+            <a href='/admin-dashboard' style='color: white; text-decoration: none; font-weight: bold; background: #34495e; padding: 10px 15px; border-radius: 5px;'>Admin Dashboard</a>
+        </nav>
+        {% endif %}
+    </header>
+
+    <div id='map'></div>
+
+    <div id='fleet-viz' {% if user.role == 'user' %}style='display:none;'{% endif %}>
+        <h4>Fleet & Teams</h4>
+        <div id='fleet-container'></div>
+    </div>
+
+    <div id='instructions'>
+        Click on the map to report a new incident.
+    </div>
+
+    <div id='report-form-container'>
+        <h3>Report Incident</h3>
+        <form id='incident-form'>
+            <input type='hidden' id='lat' name='lat'>
+            <input type='hidden' id='lon' name='lon'>
+            
+            <div class='form-group'>
+                <label for='hazard_type'>Hazard Type:</label>
+                <select id='hazard_type' name='hazard_type' required>
+                    <option value='Pothole'>Pothole</option>
+                    <option value='Fallen Tree'>Fallen Tree</option>
+                    {% if user.role != 'user' %}
+                    <option value='Damaged Sign'>Damaged Sign</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            <div class='form-group'>
+                <label for='description'>Description:</label>
+                <textarea id='description' name='description' rows='3' placeholder='Enter details...' required></textarea>
+            </div>
+
+            <button type='submit' class='btn-submit'>Submit Report</button>
+            <button type='button' class='btn-cancel' onclick='cancelReport()'>Cancel</button>
+        </form>
+    </div>
+
+    <div id='toast'></div>
+
+    <script>
+        const userRole = "{{ user.role }}";
+        const defaultCenter = [44.33, 23.81];
+        var map = L.map('map', {
+            dragging: true,
+            zoomControl: true,
+            scrollWheelZoom: true
+        }).setView(defaultCenter, 13);
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    map.setView([position.coords.latitude, position.coords.longitude], 15);
+                },
+                function() {
+                    console.log("Using default location.");
+                }
+            );
+        }
+        
+        var currentMarker = null;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        function showToast(message) {
+            var x = document.getElementById('toast');
+            x.innerText = message;
+            x.className = 'show';
+            setTimeout(function(){ x.className = x.className.replace('show', ''); }, 3000);
+        }
+
+        function loadIncidents() {
+            fetch('/interventions')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(inc => {
+                        const lat = inc.latitude;
+                        const lon = inc.longitude;
+                        const type = inc.hazard_type;
+                        const status = inc.status || 'reported';
+                        
+                        if(lat && lon) {
+                            const color = status === 'completed' ? 'green' : (status === 'assigned' ? 'orange' : (status === 'in progress' ? 'blue' : 'red'));
+                            const markerHtml = `
+                                <div style='background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;'></div>
+                            `;
+                            
+                            const customIcon = L.divIcon({
+                                html: markerHtml,
+                                className: 'custom-div-icon',
+                                iconSize: [12, 12],
+                                iconAnchor: [6, 6]
+                            });
+
+                            let popupContent = `<b>${type}</b><br>${inc.description}<br>Status: <b>${status}</b>`;
+                            
+                            if (userRole !== 'user') {
+                                if (status === 'reported') {
+                                    popupContent += `
+                                        <div id='allocation-container-${inc.id}' class='allocation-box'>
+                                            <button onclick='showAllocationDropdown(event, ${inc.id})'>Allocate Resource</button>
+                                        </div>
+                                    `;
+                                } else if (status !== 'completed') {
+                                    let label = status === 'assigned' ? 'Start Progress' : 'Complete Incident';
+                                    popupContent += `
+                                        <div class='allocation-box'>
+                                            <button onclick='advanceStatus(event, ${inc.id})'>${label}</button>
+                                        </div>
+                                    `;
+                                }
+                            }
+
+                            L.marker([lat, lon], {icon: customIcon})
+                             .addTo(map)
+                             .bindPopup(popupContent);
+                        }
+                    });
+                });
+        }
+
+        function advanceStatus(event, incidentId) {
+            if (event) event.stopPropagation();
+            fetch(`/incidents/${incidentId}/advance`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.new_status === 'completed') {
+                        showToast('Incident marked as Completed!');
+                    } else {
+                        showToast('Status advanced to: ' + data.new_status);
+                    }
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('Error: ' + data.message);
+                }
+            })
+            .catch(err => {
+                showToast('An error occurred.');
+                console.error(err);
+            });
+        }
+
+        function showAllocationDropdown(event, incidentId) {
+            if (event) event.stopPropagation();
+            const container = document.getElementById(`allocation-container-${incidentId}`);
+            const btn = container.querySelector('button');
+            if (btn && btn.innerText === 'Allocate Resource') {
+                btn.innerText = 'Loading...';
+                btn.disabled = true;
+            }
+            
+            fetch(`/incidents/${incidentId}/suggestions`)
+                .then(res => res.json())
+                .then(suggestions => {
+                    if (suggestions.length === 0) {
+                        container.innerHTML = '<p>No available vehicles nearby.</p>';
+                        return;
+                    }
+                    let html = '<select id="vehicle-select-' + incidentId + '" style="width: 100%; margin-bottom: 5px;">';
+                    suggestions.forEach(s => {
+                        html += `<option value="${s.vehicle_id}">${s.registration_number} (${s.vehicle_type}) - ${s.distance} units</option>`;
+                    });
+                    html += '</select>';
+                    html += `<div style="display: flex; gap: 5px;">`;
+                    html += `<button onclick="allocateResource(event, ${incidentId})" style="flex: 1; background: #28a745; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 3px;">Assign</button>`;
+                    html += `<button onclick="cancelAllocation(event, ${incidentId})" style="flex: 1; background: #dc3545; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 3px;">Cancel</button>`;
+                    html += `</div>`;
+                    container.innerHTML = html;
+                })
+                .catch(err => {
+                    container.innerHTML = '<p>Error loading suggestions.</p>';
+                    console.error(err);
+                });
+        }
+
+        function allocateResource(event, incidentId) {
+            if (event) event.stopPropagation();
+            const vehicleId = document.getElementById(`vehicle-select-${incidentId}`).value;
+            fetch(`/incidents/${incidentId}/allocate?vehicle_id=${vehicleId}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('Error: ' + data.message);
+                }
+            })
+            .catch(err => {
+                showToast('An error occurred during allocation.');
+                console.error(err);
+            });
+        }
+
+        function cancelAllocation(event, incidentId) {
+            if (event) event.stopPropagation();
+            const container = document.getElementById(`allocation-container-${incidentId}`);
+            container.innerHTML = `<button onclick='showAllocationDropdown(event, ${incidentId})'>Allocate Resource</button>`;
+        }
+
+        function loadFleetNodes() {
+            fetch('/fleet/nodes')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('fleet-container');
+                    if (container) {
+                        container.innerHTML = '';
+                        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                        svg.setAttribute('width', '100%');
+                        svg.setAttribute('height', data.length * 40);
+                        data.forEach((v, i) => {
+                            const y = 20 + i * 40;
+                            
+                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', '70');
+                            line.setAttribute('y1', y);
+                            line.setAttribute('x2', '130');
+                            line.setAttribute('y2', y);
+                            line.setAttribute('stroke', '#666');
+                            line.setAttribute('stroke-width', '2');
+                            svg.appendChild(line);
+
+                            const circleV = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            circleV.setAttribute('cx', '50');
+                            circleV.setAttribute('cy', y);
+                            circleV.setAttribute('r', '15');
+                            circleV.setAttribute('fill', v.availability_status === 'Available' ? '#007bff' : '#dc3545');
+                            svg.appendChild(circleV);
+
+                            const textV = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            textV.setAttribute('x', '50');
+                            textV.setAttribute('y', y + 5);
+                            textV.setAttribute('text-anchor', 'middle');
+                            textV.setAttribute('fill', 'white');
+                            textV.setAttribute('font-size', '10');
+                            textV.setAttribute('font-family', 'Arial');
+                            textV.textContent = 'V';
+                            svg.appendChild(textV);
+
+                            const labelV = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            labelV.setAttribute('x', '5');
+                            labelV.setAttribute('y', y + 5);
+                            labelV.setAttribute('font-size', '9');
+                            labelV.setAttribute('font-family', 'Arial');
+                            labelV.textContent = v.registration_number;
+                            svg.appendChild(labelV);
+
+                            const circleT = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            circleT.setAttribute('cx', '150');
+                            circleT.setAttribute('cy', y);
+                            circleT.setAttribute('r', '15');
+                            circleT.setAttribute('fill', '#28a745');
+                            svg.appendChild(circleT);
+
+                            const textT = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            textT.setAttribute('x', '150');
+                            textT.setAttribute('y', y + 5);
+                            textT.setAttribute('text-anchor', 'middle');
+                            textT.setAttribute('fill', 'white');
+                            textT.setAttribute('font-size', '10');
+                            textT.setAttribute('font-family', 'Arial');
+                            textT.textContent = 'T';
+                            svg.appendChild(textT);
+
+                            const labelT = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            labelT.setAttribute('x', '170');
+                            labelT.setAttribute('y', y + 5);
+                            labelT.setAttribute('font-size', '9');
+                            labelT.setAttribute('font-family', 'Arial');
+                            labelT.textContent = 'Team: ' + (v.assigned_team_id || 'N/A');
+                            svg.appendChild(labelT);
+                        });
+                        container.appendChild(svg);
+                    }
+                });
+        }
+
+        loadIncidents();
+        loadFleetNodes();
+
+        map.on('click', function(e) {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            
+            currentMarker = L.marker(e.latlng).addTo(map);
+            
+            document.getElementById('lat').value = e.latlng.lat;
+            document.getElementById('lon').value = e.latlng.lng;
+            document.getElementById('report-form-container').style.display = 'block';
+        });
+
+        function cancelReport() {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+                currentMarker = null;
+            }
+            document.getElementById('report-form-container').style.display = 'none';
+        }
+
+        document.getElementById('incident-form').onsubmit = function(e) {
+            e.preventDefault();
+            
+            const payload = {
+                hazard_type: document.getElementById('hazard_type').value,
+                description: document.getElementById('description').value,
+                latitude: parseFloat(document.getElementById('lat').value),
+                longitude: parseFloat(document.getElementById('lon').value)
+            };
+
+            fetch('/reports', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            })
+            .then(response => response.json())
+            .then(data => {
+                showToast('Incident reported successfully!');
+                cancelReport();
+                setTimeout(() => loadIncidents(), 1000);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                showToast('Error reporting incident.');
+            });
+        };
+    </script>
+</body>
+</html>
